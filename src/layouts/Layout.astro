@@ -1,0 +1,28 @@
+---
+import "../styles/global.css";
+import Footer from "../components/footer.astro";
+
+const {
+  title = "JuanMataku Blog",
+  description = "&copy; 2025 JuanMataku. All rights reserved.",
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <title>{title}</title>
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+
+  <body class="flex min-h-screen flex-col text-[#1f140a]">
+    <main class="mx-auto w-full max-w-[65ch] flex-1 px-6 py-10">
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

@@ -1,16 +1,35 @@
 ---
+import Layout from "../layouts/Layout.astro";
+import Navigation from "../components/navigation.astro";
+import Welcome from "../components/welcome.astro";
+import { supabase } from "../lib/supabase.js";
 
+const { data: posts, error } = await supabase
+  .from("posts")
+  .select("id, title, content, created_at")
+  .order("created_at", { ascending: false })
+  .limit(5);
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
-</html>
+<Layout title="JuanMataku Blog">
+  <Navigation />
+  <Welcome />
+
+  <h2>Latest 5 posts</h2>
+
+  {error && <p>Error: {error.message}</p>}
+
+  {posts && posts.length > 0 ? (
+    <ul>
+      {posts.map((post) => (
+        <li>
+          <h3>{post.title}</h3>
+          <small>{new Date(post.created_at).toLocaleDateString()}</small>
+          <p>{post.content}</p>
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <p>No posts yet.</p>
+  )}
+</Layout>

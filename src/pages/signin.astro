@@ -1,0 +1,50 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Navigation from "../components/navigation.astro";
+import { supabase } from "../lib/supabase.js";
+
+const accessToken = Astro.cookies.get("sb-access-token")?.value;
+const refreshToken = Astro.cookies.get("sb-refresh-token")?.value;
+
+let isValidSession = false;
+
+if (accessToken && refreshToken) {
+  await supabase.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  });
+
+  const { data } = await supabase.auth.getUser();
+  isValidSession = Boolean(data?.user);
+
+  // If cookies exist but are invalid, delete them so you're not stuck
+  if (!isValidSession) {
+    Astro.cookies.delete("sb-access-token", { path: "/" });
+    Astro.cookies.delete("sb-refresh-token", { path: "/" });
+  }
+}
+
+if (isValidSession) {
+  return Astro.redirect("/dashboard");
+}
+---
+
+<Layout title="Sign In">
+  <Navigation />
+
+  <div class="panel">
+    <h1 class="page-title">Sign In</h1>
+
+
+    <form action="/api/auth/signin" method="POST">
+      <label>Email<input type="email" name="email" required /></label>
+
+      <label>Password<input type="password" name="password" required /></label>
+
+      <button type="submit">Login</button>
+    </form>
+
+        <p>Are you new here? <a class="inline-link" href="/register"> Create an account</a></p>
+
+  </div>
+</Layout>

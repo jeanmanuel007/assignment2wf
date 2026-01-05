@@ -1,0 +1,177 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Navigation from "../components/navigation.astro";
+import { supabase } from "../lib/supabase.js";
+
+const accessToken = Astro.cookies.get("sb-access-token")?.value;
+const refreshToken = Astro.cookies.get("sb-refresh-token")?.value;
+
+if (!accessToken || !refreshToken) return Astro.redirect("/signin");
+
+await supabase.auth.setSession({
+  access_token: accessToken,
+  refresh_token: refreshToken,
+});
+
+const { data } = await supabase.auth.getUser();
+const user = data?.user;
+if (!user) {
+  Astro.cookies.delete("sb-access-token", { path: "/" });
+  Astro.cookies.delete("sb-refresh-token", { path: "/" });
+  return Astro.redirect("/signin");
+}
+
+
+let message = "";
+
+// Handle actions: create / update / delete
+if (Astro.request.method === "POST") {
+  const formData = await Astro.request.formData();
+  const action = String(formData.get("action") || "");
+
+  if (action === "create") {
+    const title = String(formData.get("title") || "");
+    const content = String(formData.get("content") || "");
+
+    const { error } = await supabase
+      .from("posts")
+      .insert([{ title, content, user_id: user.id }]);
+
+    message = error ? `Error: ${error.message}` : "Post created!";
+  }
+
+  if (action === "delete") {
+    const id = Number(formData.get("id"));
+
+    const { error } = await supabase
+      .from("posts")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    message = error ? `Error: ${error.message}` : "Post deleted!";
+  }
+
+  if (action === "update") {
+    const id = Number(formData.get("id"));
+    const title = String(formData.get("title") || "");
+    const content = String(formData.get("content") || "");
+
+    const { error } = await supabase
+      .from("posts")
+      .update({ title, content, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    message = error ? `Error: ${error.message}` : "Post updated!";
+  }
+}
+
+const { data: posts, error } = await supabase
+  .from("posts")
+  .select("id, title, content, created_at")
+  .eq("user_id", user.id)
+  .order("created_at", { ascending: false });
+---
+
+<Layout title="Dashboard">
+  <Navigation />
+
+  <section class="mx-auto max-w-3xl mt-8">
+    <h1 class="text-2xl font-bold">Dashboard</h1>
+    <p class="text-sm text-gray-600 mb-6">Logged in as {user.email}</p>
+
+    {message && <p class="mb-4 text-sm">{message}</p>}
+
+    <!-- Create Post -->
+    <div class="bg-white border rounded-xl p-6 mb-8">
+      <h2 class="text-lg font-semibold mb-4">Create a post</h2>
+
+      <form method="POST" class="space-y-4">
+        <input type="hidden" name="action" value="create" />
+
+        <div>
+          <label class="text-sm font-medium" for="new-title">Title</label>
+          <input class="mt-1 w-full border rounded-lg px-3 py-2" id="new-title" name="title" required />
+        </div>
+
+        <div>
+          <label class="text-sm font-medium" for="new-content">Content</label>
+          <textarea class="mt-1 w-full border rounded-lg px-3 py-2" id="new-content" name="content" rows="5" required></textarea>
+        </div>
+
+        <button class="bg-black text-white rounded-lg px-4 py-2 hover:opacity-90" type="submit">
+          Publish
+        </button>
+      </form>
+    </div>
+
+    <!-- My Posts -->
+    <h2 class="text-lg font-semibold mb-3">My posts</h2>
+
+    {error && <p class="text-sm">Error: {error.message}</p>}
+
+    {posts?.length ? (
+      <div class="space-y-4">
+        {posts.map((post) => (
+          <div class="bg-white border rounded-xl p-5">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <h3 class="font-semibold">{post.title}</h3>
+                <p class="text-xs text-gray-600">{new Date(post.created_at).toLocaleString()}</p>
+              </div>
+
+              <form method="POST">
+                <input type="hidden" name="action" value="delete" />
+                <input type="hidden" name="id" value={post.id} />
+                <button class="text-sm px-3 py-2 rounded bg-gray-100 hover:bg-gray-200" type="submit">
+                  Delete
+                </button>
+              </form>
+            </div>
+
+            <p class="mt-3">{post.content}</p>
+
+            <details class="mt-4">
+              <summary class="cursor-pointer text-sm underline">Edit</summary>
+
+              <form method="POST" class="mt-3 space-y-3">
+                <input type="hidden" name="action" value="update" />
+                <input type="hidden" name="id" value={post.id} />
+
+                <div>
+                  <label class="text-sm font-medium" for={`title-${post.id}`}>Title</label>
+                  <input
+                    class="mt-1 w-full border rounded-lg px-3 py-2"
+                    id={`title-${post.id}`}
+                    name="title"
+                    value={post.title}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label class="text-sm font-medium" for={`content-${post.id}`}>Content</label>
+                  <textarea
+                    class="mt-1 w-full border rounded-lg px-3 py-2"
+                    id={`content-${post.id}`}
+                    name="content"
+                    rows="4"
+                    required
+                  >{post.content}</textarea>
+                </div>
+
+                <button class="bg-black text-white rounded-lg px-4 py-2 hover:opacity-90" type="submit">
+                  Save changes
+                </button>
+              </form>
+            </details>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <p class="text-sm text-gray-600">You haven’t posted yet.</p>
+    )}
+  </section>
+</Layout>
+

@@ -1,0 +1,48 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Navigation from "../components/navigation.astro";
+import { supabase } from "../lib/supabase.js";
+
+const accessToken = Astro.cookies.get("sb-access-token")?.value;
+const refreshToken = Astro.cookies.get("sb-refresh-token")?.value;
+
+let isValidSession = false;
+
+if (accessToken && refreshToken) {
+  await supabase.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  });
+
+  const { data } = await supabase.auth.getUser();
+  isValidSession = Boolean(data?.user);
+
+  if (!isValidSession) {
+    Astro.cookies.delete("sb-access-token", { path: "/" });
+    Astro.cookies.delete("sb-refresh-token", { path: "/" });
+  }
+}
+
+if (isValidSession) {
+  return Astro.redirect("/dashboard");
+}
+---
+
+<Layout title="Register">
+  <Navigation />
+
+  <div class="panel">
+    <h1 class="page-title">Register</h1>
+
+    <form action="/api/auth/register" method="POST">
+      <label>Email<input type="email" name="email" required /></label>
+
+      <label>Password<input type="password" name="password" required /></label>
+
+      <button type="submit">Create account</button>
+    </form>
+
+    <p>Already have an account? <a class="inline-link" href="/signin"> Sign in</a></p>
+
+  </div>
+</Layout>
