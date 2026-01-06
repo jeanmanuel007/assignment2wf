@@ -1,0 +1,81 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Navigation from "../components/navigation.astro";
+import { supabase } from "../lib/supabase.js";
+
+const code = Astro.url.searchParams.get("code") || "";
+
+let notice = "";
+let errorMessage = "";
+
+if (Astro.request.method === "POST") {
+  const formData = await Astro.request.formData();
+  const newPassword = String(formData.get("new_password") || "");
+  const formCode = String(formData.get("code") || code || "");
+
+  if (!formCode) {
+    errorMessage = "Missing reset code. Use the link from the email.";
+  } else if (!newPassword || newPassword.length < 6) {
+    errorMessage = "Password must be at least 6 characters.";
+  } else {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(formCode);
+
+    if (error) {
+      errorMessage = error.message;
+    } else {
+      const session = data?.session;
+
+      if (session?.access_token && session?.refresh_token) {
+        await supabase.auth.setSession({
+          access_token: session.access_token,
+          refresh_token: session.refresh_token,
+        });
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (updateError) {
+        errorMessage = updateError.message;
+      } else {
+        if (session?.access_token) {
+          Astro.cookies.set("sb-access-token", session.access_token, { path: "/" });
+        }
+        if (session?.refresh_token) {
+          Astro.cookies.set("sb-refresh-token", session.refresh_token, { path: "/" });
+        }
+        notice = "Password reset. You can sign in now.";
+      }
+    }
+  }
+}
+---
+
+<Layout title="Reset Password">
+  <Navigation />
+
+  <div class="panel">
+    <h1 class="page-title">Reset password</h1>
+
+    {!code && <p>Missing reset code. Use the link from the email.</p>}
+
+    {notice && <p class="status-banner status-success">{notice}</p>}
+    {errorMessage && <p class="status-banner status-error">{errorMessage}</p>}
+
+    {code && (
+      <form method="POST">
+        <input type="hidden" name="code" value={code} />
+        <label>
+          New password
+          <input type="password" name="new_password" minlength="6" required />
+        </label>
+        <button type="submit">Set new password</button>
+      </form>
+    )}
+
+    <p>
+      <a class="inline-link" href="/signin">Back to sign in</a>
+    </p>
+  </div>
+</Layout>

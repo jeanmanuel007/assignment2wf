@@ -85,11 +85,25 @@
 
 @layer components {
   .panel {
-    background: rgba(255, 255, 255, 0.78);
+    background: rgba(255, 255, 255, 0.84);
     border: 1px solid rgba(31, 20, 10, 0.12);
     border-radius: 1rem;
     box-shadow: 0 12px 30px rgba(15, 10, 5, 0.12);
     padding: 2rem;
+  }
+
+  .nav-button {
+    display: inline-flex;
+    align-items: center;
+    height: 2rem;
+    line-height: 2rem;
+    padding: 0 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(31, 20, 10, 0.3);
+    background: #1f140a;
+    color: #fff;
+    font-size: 0.875rem;
+    font-weight: 600;
   }
 
   .page-title {
@@ -111,5 +125,23 @@
   .inline-link:hover {
     color: #1f140a;
     text-decoration-color: rgba(31, 20, 10, 0.7);
+  }
+
+  .status-banner {
+    border-radius: 0.75rem;
+    border: 1px solid rgba(31, 20, 10, 0.15);
+    padding: 0.75rem 1rem;
+    margin: 0 0 1rem;
+    font-weight: 600;
+  }
+
+  .status-success {
+    background: #e7f3ec;
+    color: #1f4d3a;
+  }
+
+  .status-error {
+    background: #fdecea;
+    color: #7a2019;
   }
 }

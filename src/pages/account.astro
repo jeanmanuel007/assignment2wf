@@ -1,0 +1,134 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Navigation from "../components/navigation.astro";
+import { supabase } from "../lib/supabase.js";
+
+const accessToken = Astro.cookies.get("sb-access-token")?.value;
+const refreshToken = Astro.cookies.get("sb-refresh-token")?.value;
+
+if (!accessToken || !refreshToken) {
+  return Astro.redirect("/signin");
+}
+
+await supabase.auth.setSession({
+  access_token: accessToken,
+  refresh_token: refreshToken,
+});
+
+const { data } = await supabase.auth.getUser();
+const user = data?.user;
+
+if (!user) {
+  return Astro.redirect("/signin");
+}
+
+let profileUsername = "";
+const { data: profileData } = await supabase
+  .from("profiles")
+  .select("username")
+  .eq("id", user.id)
+  .single();
+
+if (profileData?.username) {
+  profileUsername = profileData.username;
+}
+
+let notice = "";
+let errorMessage = "";
+
+if (Astro.request.method === "POST") {
+  const formData = await Astro.request.formData();
+  const action = String(formData.get("action") || "");
+
+  if (action === "update-profile") {
+    const username = String(formData.get("username") || "").trim();
+
+    if (!username) {
+      errorMessage = "Display name cannot be empty.";
+    } else {
+      const { error } = await supabase
+        .from("profiles")
+        .upsert({ id: user.id, username }, { onConflict: "id" });
+
+      if (error) {
+        errorMessage = error.message;
+      } else {
+        profileUsername = username;
+        notice = "Display name updated.";
+      }
+    }
+  }
+
+  if (action === "change-password") {
+    const newPassword = String(formData.get("new_password") || "");
+
+    if (!newPassword || newPassword.length < 6) {
+      errorMessage = "Password must be at least 6 characters.";
+    } else {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) {
+        errorMessage = error.message;
+      } else {
+        notice = "Password updated.";
+      }
+    }
+  }
+
+  if (action === "reset-password") {
+    const email = String(formData.get("email") || "").trim();
+
+    if (!email) {
+      errorMessage = "Email is required.";
+    } else {
+      const redirectTo = new URL("/reset", Astro.url).toString();
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo,
+      });
+
+      if (error) {
+        errorMessage = error.message;
+      } else {
+        notice = "Reset email sent. Check your inbox.";
+      }
+    }
+  }
+}
+---
+
+<Layout title="Account">
+  <Navigation />
+
+  <div class="panel">
+    <h1 class="page-title">Account</h1>
+
+    <p><strong>Email:</strong> {user.email}</p>
+
+    {notice && <p class="status-banner status-success">{notice}</p>}
+    {errorMessage && <p class="status-banner status-error">{errorMessage}</p>}
+
+    <form method="POST">
+      <input type="hidden" name="action" value="update-profile" />
+      <label>Display name<input type="text" name="username" value={profileUsername} required /></label>
+      <button type="submit">Update profile</button>
+    </form>
+
+    <form method="POST">
+      <input type="hidden" name="action" value="change-password" />
+      <label>New password<input type="password" name="new_password" minlength="6" required /></label>
+      <button type="submit">Change password</button>
+    </form>
+
+    <form method="POST">
+      <input type="hidden" name="action" value="reset-password" />
+      <label>Reset password email<input type="email" name="email" value={user.email ?? ""} required /></label>
+      <button type="submit">Send reset link</button>
+    </form>
+
+    <form action="/api/auth/signout" method="POST">
+      <button type="submit">Log out</button>
+    </form>
+  </div>
+</Layout>

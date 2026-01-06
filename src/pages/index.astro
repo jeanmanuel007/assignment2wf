@@ -15,21 +15,23 @@ const { data: posts, error } = await supabase
   <Navigation />
   <Welcome />
 
-  <h2>Latest 5 posts</h2>
+  <section class="panel">
+    <h2>Latest 5 posts</h2>
 
-  {error && <p>Error: {error.message}</p>}
+    {error && <p>Error: {error.message}</p>}
 
-  {posts && posts.length > 0 ? (
-    <ul>
-      {posts.map((post) => (
-        <li>
-          <h3>{post.title}</h3>
-          <small>{new Date(post.created_at).toLocaleDateString()}</small>
-          <p>{post.content}</p>
-        </li>
-      ))}
-    </ul>
-  ) : (
-    <p>No posts yet.</p>
-  )}
+    {posts && posts.length > 0 ? (
+      <ul>
+        {posts.map((post) => (
+          <li>
+            <h3>{post.title}</h3>
+            <small>{new Date(post.created_at).toLocaleDateString()}</small>
+            <p>{post.content}</p>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <p>No posts yet.</p>
+    )}
+  </section>
 </Layout>
