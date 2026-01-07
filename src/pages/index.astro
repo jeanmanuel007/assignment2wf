@@ -59,14 +59,63 @@ if (Astro.request.method === "POST") {
       if (!commentId || !reactionOptions.includes(emoji)) {
         errorMessage = "Invalid reaction.";
       } else {
-        const { error } = await supabase
+        const { data: existing } = await supabase
           .from("comment_reactions")
-          .insert([{ comment_id: commentId, user_id: user.id, emoji }]);
+          .select("id")
+          .eq("comment_id", commentId)
+          .eq("user_id", user.id)
+          .eq("emoji", emoji)
+          .maybeSingle();
+
+        const { error } = existing
+          ? await supabase
+              .from("comment_reactions")
+              .delete()
+              .eq("id", existing.id)
+          : await supabase
+              .from("comment_reactions")
+              .insert([{ comment_id: commentId, user_id: user.id, emoji }]);
 
         if (error) {
           errorMessage = error.message;
         } else {
-          notice = "Reaction added.";
+          notice = existing ? "Reaction removed." : "Reaction added.";
+        }
+      }
+    }
+  }
+
+  if (action === "post_reaction") {
+    if (!user) {
+      errorMessage = "Please sign in to react.";
+    } else {
+      const postId = Number(formData.get("post_id"));
+      const emoji = String(formData.get("emoji") || "").trim();
+
+      if (!postId || !reactionOptions.includes(emoji)) {
+        errorMessage = "Invalid reaction.";
+      } else {
+        const { data: existing } = await supabase
+          .from("post_reactions")
+          .select("id")
+          .eq("post_id", postId)
+          .eq("user_id", user.id)
+          .eq("emoji", emoji)
+          .maybeSingle();
+
+        const { error } = existing
+          ? await supabase
+              .from("post_reactions")
+              .delete()
+              .eq("id", existing.id)
+          : await supabase
+              .from("post_reactions")
+              .insert([{ post_id: postId, user_id: user.id, emoji }]);
+
+        if (error) {
+          errorMessage = error.message;
+        } else {
+          notice = existing ? "Reaction removed." : "Reaction added.";
         }
       }
     }
@@ -82,8 +131,22 @@ const { data: posts, error } = await supabase
 const postIds = posts?.map((post) => post.id) ?? [];
 const commentsByPost = new Map();
 const reactionsByComment = new Map();
+const reactionsByPost = new Map();
 
 if (postIds.length > 0) {
+  const { data: postReactions } = await supabase
+    .from("post_reactions")
+    .select("post_id, emoji")
+    .in("post_id", postIds);
+
+  if (postReactions) {
+    for (const reaction of postReactions) {
+      const counts = reactionsByPost.get(reaction.post_id) ?? new Map();
+      counts.set(reaction.emoji, (counts.get(reaction.emoji) ?? 0) + 1);
+      reactionsByPost.set(reaction.post_id, counts);
+    }
+  }
+
   const { data: comments } = await supabase
     .from("comments")
     .select("id, post_id, content, created_at")
@@ -135,6 +198,33 @@ if (postIds.length > 0) {
             <h3>{post.title}</h3>
             <small>{new Date(post.created_at).toLocaleDateString()}</small>
             <p>{post.content}</p>
+            <div class="mt-4 flex flex-wrap gap-2">
+              {reactionOptions.map((emoji) => {
+                const counts = reactionsByPost.get(post.id) ?? new Map();
+                const count = counts.get(emoji) ?? 0;
+                return user ? (
+                  <form method="POST">
+                    <input type="hidden" name="action" value="post_reaction" />
+                    <input type="hidden" name="post_id" value={post.id} />
+                    <button
+                      class="flex items-center gap-2 rounded-full border border-gray-300 bg-white/90 px-3 py-1.5 text-sm font-medium text-gray-800 shadow-sm hover:bg-white"
+                      type="submit"
+                      name="emoji"
+                      value={emoji}
+                    >
+                      <span aria-hidden="true">{emoji}</span>
+                      <span class="text-black">{count}</span>
+                      <span class="sr-only">React</span>
+                    </button>
+                  </form>
+                ) : (
+                  <div class="flex items-center gap-2 rounded-full border border-gray-300 bg-white/90 px-3 py-1.5 text-sm font-medium text-gray-800 shadow-sm">
+                    <span aria-hidden="true">{emoji}</span>
+                    <span class="text-black">{count}</span>
+                  </div>
+                );
+              })}
+            </div>
 
             <div class="mt-4 space-y-3">
               {(commentsByPost.get(post.id) ?? []).length ? (
@@ -142,9 +232,9 @@ if (postIds.length > 0) {
                   {(commentsByPost.get(post.id) ?? []).map((comment) => {
                     const counts = reactionsByComment.get(comment.id) ?? new Map();
                     return (
-                      <div class="rounded-lg border bg-white px-3 py-2 text-sm">
+                      <div class="rounded-2xl border-2 border-gray-800 bg-white/90 px-4 py-3 text-sm">
                         <p>{comment.content}</p>
-                        <p class="text-xs text-gray-600">
+                        <p class="text-xs text-gray-700">
                           {new Date(comment.created_at).toLocaleString()}
                         </p>
 
@@ -156,20 +246,20 @@ if (postIds.length > 0) {
                                 <input type="hidden" name="action" value="reaction" />
                                 <input type="hidden" name="comment_id" value={comment.id} />
                                 <button
-                                  class="flex items-center gap-1 rounded-full border px-2 py-1 text-xs hover:bg-gray-50"
+                                  class="flex items-center gap-2 rounded-full border border-gray-300 bg-white/90 px-3 py-1.5 text-sm font-medium text-gray-800 shadow-sm hover:bg-white"
                                   type="submit"
                                   name="emoji"
                                   value={emoji}
                                 >
                                   <span aria-hidden="true">{emoji}</span>
-                                  <span>{count}</span>
+                                  <span class="text-black">{count}</span>
                                   <span class="sr-only">React</span>
                                 </button>
                               </form>
                             ) : (
-                              <div class="flex items-center gap-1 rounded-full border px-2 py-1 text-xs text-gray-600">
+                              <div class="flex items-center gap-2 rounded-full border border-gray-300 bg-white/90 px-3 py-1.5 text-sm font-medium text-gray-800 shadow-sm">
                                 <span aria-hidden="true">{emoji}</span>
-                                <span>{count}</span>
+                                <span class="text-black">{count}</span>
                               </div>
                             );
                           })}
