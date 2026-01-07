@@ -20,6 +20,7 @@ if (accessToken && refreshToken) {
 
 let notice = "";
 let errorMessage = "";
+const reactionOptions = ["👍", "❤️", "😂", "😮", "🎉"];
 
 if (Astro.request.method === "POST") {
   const formData = await Astro.request.formData();
@@ -47,6 +48,29 @@ if (Astro.request.method === "POST") {
       }
     }
   }
+
+  if (action === "reaction") {
+    if (!user) {
+      errorMessage = "Please sign in to react.";
+    } else {
+      const commentId = Number(formData.get("comment_id"));
+      const emoji = String(formData.get("emoji") || "").trim();
+
+      if (!commentId || !reactionOptions.includes(emoji)) {
+        errorMessage = "Invalid reaction.";
+      } else {
+        const { error } = await supabase
+          .from("comment_reactions")
+          .insert([{ comment_id: commentId, user_id: user.id, emoji }]);
+
+        if (error) {
+          errorMessage = error.message;
+        } else {
+          notice = "Reaction added.";
+        }
+      }
+    }
+  }
 }
 
 const { data: posts, error } = await supabase
@@ -57,6 +81,7 @@ const { data: posts, error } = await supabase
 
 const postIds = posts?.map((post) => post.id) ?? [];
 const commentsByPost = new Map();
+const reactionsByComment = new Map();
 
 if (postIds.length > 0) {
   const { data: comments } = await supabase
@@ -70,6 +95,22 @@ if (postIds.length > 0) {
       const list = commentsByPost.get(comment.post_id) ?? [];
       list.push(comment);
       commentsByPost.set(comment.post_id, list);
+    }
+  }
+
+  const commentIds = comments?.map((comment) => comment.id) ?? [];
+  if (commentIds.length > 0) {
+    const { data: reactions } = await supabase
+      .from("comment_reactions")
+      .select("comment_id, emoji")
+      .in("comment_id", commentIds);
+
+    if (reactions) {
+      for (const reaction of reactions) {
+        const counts = reactionsByComment.get(reaction.comment_id) ?? new Map();
+        counts.set(reaction.emoji, (counts.get(reaction.emoji) ?? 0) + 1);
+        reactionsByComment.set(reaction.comment_id, counts);
+      }
     }
   }
 }
@@ -98,14 +139,44 @@ if (postIds.length > 0) {
             <div class="mt-4 space-y-3">
               {(commentsByPost.get(post.id) ?? []).length ? (
                 <div class="space-y-2">
-                  {(commentsByPost.get(post.id) ?? []).map((comment) => (
-                    <div class="rounded-lg border bg-white px-3 py-2 text-sm">
-                      <p>{comment.content}</p>
-                      <p class="text-xs text-gray-600">
-                        {new Date(comment.created_at).toLocaleString()}
-                      </p>
-                    </div>
-                  ))}
+                  {(commentsByPost.get(post.id) ?? []).map((comment) => {
+                    const counts = reactionsByComment.get(comment.id) ?? new Map();
+                    return (
+                      <div class="rounded-lg border bg-white px-3 py-2 text-sm">
+                        <p>{comment.content}</p>
+                        <p class="text-xs text-gray-600">
+                          {new Date(comment.created_at).toLocaleString()}
+                        </p>
+
+                        <div class="mt-2 flex flex-wrap gap-2">
+                          {reactionOptions.map((emoji) => {
+                            const count = counts.get(emoji) ?? 0;
+                            return user ? (
+                              <form method="POST">
+                                <input type="hidden" name="action" value="reaction" />
+                                <input type="hidden" name="comment_id" value={comment.id} />
+                                <button
+                                  class="flex items-center gap-1 rounded-full border px-2 py-1 text-xs hover:bg-gray-50"
+                                  type="submit"
+                                  name="emoji"
+                                  value={emoji}
+                                >
+                                  <span aria-hidden="true">{emoji}</span>
+                                  <span>{count}</span>
+                                  <span class="sr-only">React</span>
+                                </button>
+                              </form>
+                            ) : (
+                              <div class="flex items-center gap-1 rounded-full border px-2 py-1 text-xs text-gray-600">
+                                <span aria-hidden="true">{emoji}</span>
+                                <span>{count}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <p class="text-sm text-gray-600">No comments yet.</p>
