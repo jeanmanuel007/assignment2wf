@@ -46,9 +46,11 @@ if (Astro.request.method === "POST") {
     if (!username) {
       errorMessage = "Display name cannot be empty.";
     } else {
-      const { error } = await supabase
-        .from("profiles")
-        .upsert({ id: user.id, username }, { onConflict: "id" });
+const { error } = await supabase
+  .from("profiles")
+  .update({ username })
+  .eq("id", user.id);
+
 
       if (error) {
         errorMessage = error.message;

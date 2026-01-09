@@ -124,11 +124,12 @@ if (Astro.request.method === "POST") {
 
 const { data: posts, error } = await supabase
   .from("posts")
-  .select("id, title, content, created_at")
+  .select("id, title, content, created_at, user_id")
   .order("created_at", { ascending: false })
   .limit(5);
 
 const postIds = posts?.map((post) => post.id) ?? [];
+const profilesById = new Map();
 const commentsByPost = new Map();
 const reactionsByComment = new Map();
 const reactionsByPost = new Map();
@@ -149,7 +150,7 @@ if (postIds.length > 0) {
 
   const { data: comments } = await supabase
     .from("comments")
-    .select("id, post_id, content, created_at")
+    .select("id, post_id, content, created_at, user_id")
     .in("post_id", postIds)
     .order("created_at", { ascending: true });
 
@@ -158,6 +159,35 @@ if (postIds.length > 0) {
       const list = commentsByPost.get(comment.post_id) ?? [];
       list.push(comment);
       commentsByPost.set(comment.post_id, list);
+    }
+  }
+
+  const profileIds = new Set();
+  if (posts) {
+    for (const post of posts) {
+      if (post.user_id) {
+        profileIds.add(post.user_id);
+      }
+    }
+  }
+  if (comments) {
+    for (const comment of comments) {
+      if (comment.user_id) {
+        profileIds.add(comment.user_id);
+      }
+    }
+  }
+
+  if (profileIds.size > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, username")
+      .in("id", Array.from(profileIds));
+
+    if (profiles) {
+      for (const profile of profiles) {
+        profilesById.set(profile.id, profile);
+      }
     }
   }
 
@@ -181,7 +211,7 @@ if (postIds.length > 0) {
 
 <Layout title="JuanMataku Blog">
   <Navigation />
-  <Welcome />
+  {!user && <Welcome />}
 
   <section class="panel">
     <h2>Latest 5 posts</h2>
@@ -196,6 +226,9 @@ if (postIds.length > 0) {
         {posts.map((post) => (
           <li>
             <h3>{post.title}</h3>
+            <p class="text-sm">
+              By {profilesById.get(post.user_id)?.username || "Anonymous"}
+            </p>
             <small>{new Date(post.created_at).toLocaleDateString()}</small>
             <p>{post.content}</p>
             <div class="mt-4 flex flex-wrap gap-2">
@@ -234,6 +267,9 @@ if (postIds.length > 0) {
                     return (
                       <div class="rounded-2xl border-2 border-gray-800 bg-white/90 px-4 py-3 text-sm">
                         <p>{comment.content}</p>
+                        <p class="text-xs">
+                          {profilesById.get(comment.user_id)?.username || "Anonymous"}
+                        </p>
                         <p class="text-xs text-gray-700">
                           {new Date(comment.created_at).toLocaleString()}
                         </p>
